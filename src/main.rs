@@ -1,16 +1,17 @@
 //mod cli;
 mod discovery;
 
+use discovery::Discovery;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let peers = discovery::discover()?;
-    for peer in peers{
+    let peer_discovery: Discovery = Default::default();
+    peer_discovery.discover()?;
+    
+    std::thread::sleep(std::time::Duration::new(5, 0));
+    
+    let peers = peer_discovery.get_peers();
+    for peer in peers {
         println!("{:?}", peer);
     }
-    
-    // match cli::run(){
-    //     Ok(()) => (),
-    //     Err(err) => panic!("{:?}", err)
-    // };
-    
     Ok(())
 }
