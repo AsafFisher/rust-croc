@@ -3,6 +3,7 @@ use std::default::Default;
 use std::io;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::{Arc, RwLock};
+use std::thread::{spawn, JoinHandle};
 
 // SSTP multicast address.
 const DEFAULT_V4_MULTICAST_ADDRESS: [u8; 4] = [239, 255, 255, 250];
@@ -17,7 +18,7 @@ macro_rules! concurrent {
         ($($x:expr);*;) => {
             {
 
-            std::thread::spawn(move || {
+            spawn(move || {
                 $(
                     $x;
                 )*
@@ -48,8 +49,6 @@ pub struct Discovery {
     multicast_addr: SocketAddr,
     binding_addr: SocketAddr,
     message: Vec<u8>,
-    peerlist: Arc<RwLock<Vec<Peer>>>,
-    stopper: Arc<RwLock<bool>>,
 }
 
 impl Default for Discovery {
@@ -58,51 +57,94 @@ impl Default for Discovery {
             multicast_addr: SocketAddr::from((DEFAULT_V4_MULTICAST_ADDRESS, DEFAULT_PORT_NUMBER)),
             binding_addr: SocketAddr::from((INADDR_ANY, DEFAULT_PORT_NUMBER)),
             message: b"discover".to_vec(),
-            peerlist: Arc::new(RwLock::new(Vec::new())),
-            stopper: Arc::new(RwLock::new(false)),
         }
     }
 }
 
 impl Discovery {
-    pub fn discover< C: Fn(&mut Vec<Peer>) + std::marker::Send + 'static >(&self, callback: C) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn discover<C: Fn(&mut Vec<Peer>) + std::marker::Send + 'static>(
+        &self,
+        callback: C,
+    ) -> Result<DiscoveryManagment, Box<dyn std::error::Error>> {
         let Discovery {
             multicast_addr,
             binding_addr,
             message,
-            peerlist,
-            stopper,
         } = self.clone();
 
+        let peerlist = Arc::new(RwLock::new(Vec::new()));
+        let stopper = Arc::new(RwLock::new(false));
+
         // Setup stoppers
-        let (broadcast_stopper, receiver_stopper) = (stopper.clone(), stopper);
+        let (broadcast_stopper, receiver_stopper) = (stopper.clone(), stopper.clone());
 
         // Create the discovery socket.
-        let send_socket = UdpSocket::bind(binding_addr).expect("Fuck");
+        let send_socket = UdpSocket::bind(binding_addr).expect("Could not bind!");
         let receive_socket = send_socket
             .try_clone()
             .expect("Could not clone the socket!");
 
         // Start the broadcasting, pass the stopper.
-        concurrent! {
+        let broadcast_thread = concurrent! {
             broadcast(send_socket, &multicast_addr, message,
             &broadcast_stopper).unwrap();
         };
 
+        let peers = peerlist.clone();
         // Listen for broadcast.
-        concurrent! {
+        let receiver_thread = concurrent! {
             receiver(
                 receive_socket,
                 multicast_addr.ip(),
                 binding_addr.ip(),
-                &peerlist,
+                &peers,
                 callback,
                 &receiver_stopper,
             ).unwrap();
         };
-        Ok(())
+        let manager = DiscoveryManagment {
+            broadcast_thread: Some(broadcast_thread),
+            receiver_thread: Some(receiver_thread),
+            peerlist,
+            stopper,
+        };
+        Ok(manager)
+    }
+}
+
+pub struct DiscoveryManagment {
+    broadcast_thread: Option<JoinHandle<()>>,
+    receiver_thread: Option<JoinHandle<()>>,
+    peerlist: Arc<RwLock<Vec<Peer>>>,
+    stopper: Arc<RwLock<bool>>,
+}
+impl DiscoveryManagment {
+    pub fn stop(&mut self) {
+        {
+            let mut w_stop = self.stopper.write().expect("Deadlock");
+            *w_stop = true;
+        }
+
+        if let Some(h) = self.broadcast_thread.take() {
+            h.join().expect("Deadlock");
+        }
+        if let Some(h) = self.receiver_thread.take() {
+            h.join().expect("Deadlock");
+        }
     }
 
+    pub fn get_peers(&self) -> Vec<Peer> {
+        let peerlist_guard = self.peerlist.read().expect("Deadlock");
+        return (*peerlist_guard).clone();
+    }
+}
+impl Drop for DiscoveryManagment {
+    fn drop(&mut self) {
+        if self.broadcast_thread.is_some() || self.receiver_thread.is_some() {
+            //panic!("You MUST call either join on `C` to clean it up.");
+            println!("Who?{:?}", self.receiver_thread.is_some());
+        }
+    }
 }
 
 fn receiver<C: Fn(&mut Vec<Peer>) + std::marker::Send + 'static>(
@@ -121,9 +163,11 @@ fn receiver<C: Fn(&mut Vec<Peer>) + std::marker::Send + 'static>(
 
     let mut buff = [0u8; 65535];
     loop {
-        let stop = stopper.read().expect("Deadlock");
-        if *stop {
-            return Ok(());
+        {
+            let stop = stopper.read().expect("Deadlock");
+            if *stop {
+                return Ok(());
+            }
         }
         let (amount, src) = socket.recv_from(&mut buff).unwrap();
         println!("Got packet");
@@ -149,11 +193,13 @@ fn broadcast(
         socket.set_multicast_loop_v4(true)?;
     }
     loop {
-        let stop = stopper.read().expect("Deadlock");
-        if *stop {
-            return Ok(());
+        {
+            let stop = stopper.read().expect("Deadlock");
+            if *stop {
+                return Ok(());
+            }
         }
+        std::thread::sleep(std::time::Duration::new(2, 0));
         socket.send_to(&message, multicast_address.to_string())?;
-        std::thread::sleep(std::time::Duration::new(1, 0));
     }
 }
