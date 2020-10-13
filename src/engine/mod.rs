@@ -29,7 +29,7 @@ pub fn start() -> Result<(), EngineError> {
     let peer_discovery: Discovery = Default::default();
     // peer_list was cloned and moved here
     let mut manager = peer_discovery
-        .discover(move |peer_list: &mut Vec<Peer>| {
+        .discover(move |peer_list| {
             let mut lock = peers.write().unwrap();
             lock.clear();
             lock.append(peer_list)
@@ -44,7 +44,9 @@ pub fn start() -> Result<(), EngineError> {
         if !peers.is_empty() {
             println!("{:?}", peers);
             b.stop();
-            return Ok(());
+            break;
         }
     }
+
+    Ok(())
 }

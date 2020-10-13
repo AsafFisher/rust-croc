@@ -55,6 +55,8 @@ fn file_exist(val: &str) -> Result<(), io::Error> {
     }
     Ok(())
 }
+
+#[allow(dead_code)]
 pub fn run() -> Result<(), io::Error>{
     let opts: Opts = Opts::parse();
     match opts.subcmd {

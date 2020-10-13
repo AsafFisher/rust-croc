@@ -133,6 +133,7 @@ impl DiscoveryManagment {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_peers(&self) -> Vec<Peer> {
         let peerlist_guard = self.peerlist.read().expect("Deadlock");
         return (*peerlist_guard).clone();
@@ -190,7 +191,7 @@ fn broadcast(
     stopper: &RwLock<bool>,
 ) -> Result<(), io::Error> {
     if cfg!(debug_assertions) {
-        socket.set_multicast_loop_v4(true)?;
+        socket.set_multicast_loop_v4(false)?;
     }
     loop {
         {
