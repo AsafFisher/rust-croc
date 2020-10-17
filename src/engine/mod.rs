@@ -1,4 +1,4 @@
-use crate::discovery::{Discovery, Peer};
+use oxidiscovery::{Discovery, Peer};
 use std::error::Error;
 use std::fmt;
 use std::sync::{Arc, RwLock};
@@ -26,7 +26,10 @@ pub fn start() -> Result<(), EngineError> {
     let lpeers: Arc<RwLock<Vec<Peer>>> = Arc::new(RwLock::new(Vec::new()));
     let peers = lpeers.clone();
 
-    let peer_discovery: Discovery = Default::default();
+    let peer_discovery = Discovery {
+        transmission_timeout: std::time::Duration::from_secs(10),
+        ..Default::default()
+    };
     // peer_list was cloned and moved here
     let mut manager = peer_discovery
         .discover(move |peer_list| {
@@ -41,11 +44,12 @@ pub fn start() -> Result<(), EngineError> {
 
         let lock = lpeers.read();
         let peers = lock.unwrap();
-        if !peers.is_empty() {
+        if !peers.is_empty() || !b.is_alive() {
             println!("{:?}", peers);
             b.stop();
             break;
         }
+        std::thread::sleep(std::time::Duration::from_millis(250))
     }
 
     Ok(())
