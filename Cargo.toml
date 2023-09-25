@@ -4,7 +4,22 @@ version = "0.1.0"
 authors = ["Asaf Fisher <asaffisher@icloud.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "crypto"
+path = "src/crypto/lib.rs"
+
+[[bin]]
+name = "croc"
+path = "src/main.rs"
 
 [dependencies]
-clap = "3.0.0-beta.2"
+clap = "3.0.0-beta.2"anyhow = "1.0.75"
+num-bigint-dig = "0.8.4"
+num-traits = "0.2"
+once_cell = "1.18.0"
+rand = "0.8.5"
+serde = { version = "1.0.188", features = ["derive"] }
+serde_repr = "0.1.16"
+serde_with = "3.3.0"
+sha2 = "0.10.7"
+thiserror = "1.0.48"
