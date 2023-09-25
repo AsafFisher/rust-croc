@@ -36,12 +36,22 @@ impl AesEncryptor {
     /// let session_key = [0u8; 32];
     /// let encryption_session = EncryptionSession::new(&session_key);
     /// ```
-    pub fn new(session_key: &[u8; 32]) -> Self {
+    pub fn new(session_key: &[u8; 32], salt: Option<[u8; 8]>) -> Self {
         // Generate a unique salt
         let mut rnd = rand::thread_rng();
-        let mut salt = [0u8; 8];
-        rnd.fill_bytes(&mut salt);
-        debug!("Generated salt: {:x?}", hex::encode(&salt));
+        let salt = match salt {
+            Some(salt) => {
+                debug!("Got salt: {:x?}", hex::encode(salt));
+                salt
+            },
+            None => {
+                let mut salt = [0u8; 8];
+                rnd.fill_bytes(&mut salt);
+                debug!("Generated salt: {:x?}", hex::encode(salt));
+                salt
+            },
+        };
+        
 
         // Derive a strong key using PBKDF2-HMAC-SHA256
         let strong_key = pbkdf2_hmac_array::<Sha256, 32>(session_key, &salt, 100);

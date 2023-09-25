@@ -174,7 +174,7 @@ fn siec255() -> &'static SIEC255Params {
     &SIEC255
 }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Role {
     Sender,
@@ -392,13 +392,13 @@ impl Pake<SIEC255Params> {
             }
         }
     }
-    pub fn update(&mut self, b_key: PakePubKey) -> Result<(), Error> {
-        if self.pub_pake.role == b_key.role {
+    pub fn update(&mut self, key: PakePubKey) -> Result<(), Error> {
+        if self.pub_pake.role == key.role {
             return Err(Error::SameRole);
         }
         match self.pub_pake.role {
             Role::Sender => {
-                let (y_u, y_v) = is_valid_point(&b_key.y_u, &b_key.y_v)?;
+                let (y_u, y_v) = is_valid_point(&key.y_u, &key.y_v)?;
                 if !self.curve.is_on_curve(&y_u, &y_v) {
                     return Err(Error::PointNotOnCurve { x: y_u, y: y_v });
                 }
@@ -435,7 +435,7 @@ impl Pake<SIEC255Params> {
                 debug!("K sender: {:x?}", self.k)
             }
             Role::Reciever => {
-                let (x_u, x_v) = is_valid_point(&b_key.x_u, &b_key.x_v)?;
+                let (x_u, x_v) = is_valid_point(&key.x_u, &key.x_v)?;
 
                 // Make sure X is on the curve
                 if !self.curve.is_on_curve(&x_u, &x_v) {
