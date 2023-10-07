@@ -32,20 +32,20 @@ struct Config {
     disable_local: bool,
 }
 
-struct FilesTransfer {
+struct RelayClient {
     stream: CrocProto,
     files: Vec<PathBuf>,
     relay_ports: Vec<String>,
     disable_local: bool,
 }
-impl FilesTransfer {
+impl RelayClient {
     pub async fn connect<A: ToSocketAddrs>(
         relay_addr: A,
         password: &str,
         room: &str,
         disable_local: bool,
     ) -> Result<Self> {
-        let mut transferer = FilesTransfer {
+        let mut transferer = RelayClient {
             stream: CrocProto::connect(relay_addr).await?,
             files: vec![],
             relay_ports: vec![],
@@ -178,13 +178,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let default_relay_addr = "localhost:9009";
-    let mut transferer =
-        FilesTransfer::connect(default_relay_addr, "pass123", "123", false).await?;
+    let mut transferer = RelayClient::connect(default_relay_addr, "pass123", "123", false).await?;
     let client = transferer.send();
 
     let default_relay_addr = "localhost:9009";
-    let mut transferer2 =
-        FilesTransfer::connect(default_relay_addr, "pass123", "123", false).await?;
+    let mut transferer2 = RelayClient::connect(default_relay_addr, "pass123", "123", false).await?;
     let client2 = transferer2.recv();
 
     let (_res, _re2, _res3) = tokio::join!(relay_task, client, client2);
