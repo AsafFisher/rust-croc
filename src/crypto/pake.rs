@@ -296,7 +296,7 @@ fn bigint_to_signed_bytes_be(num: &BigInt) -> Vec<u8> {
 /// use crypto::{Pake, Role};
 /// use serde_json;
 /// fn main() {
-///     let pake = Pake::new(Role::Sender);
+///     let pake = Pake::new(Role::Sender, None);
 ///     let str = serde_json::to_string(&pake.pub_pake).unwrap();
 ///     println!("a{str}");
 /// }
@@ -306,8 +306,8 @@ fn bigint_to_signed_bytes_be(num: &BigInt) -> Vec<u8> {
 ///
 ///
 impl Pake<SIEC255Params> {
-    pub fn new(role: Role) -> Self {
-        let weak_key = [1u8, 2, 3];
+    pub fn new(role: Role, key: Option<&[u8]>) -> Self {
+        let weak_key = key.unwrap_or(&[1u8, 2, 3]);
         let u_u =
             BigInt::parse_bytes(b"793136080485469241208656611513609866400481671853", 10).unwrap();
         let u_v = BigInt::parse_bytes(
@@ -498,7 +498,7 @@ mod test {
 
     #[test]
     fn test_impl() {
-        let _a = Pake::new(super::Role::Sender);
+        let _a = Pake::new(super::Role::Sender, None);
 
         // let msg: Message = Message::Pake {
         //     bytes: base64::engine::general_purpose::STANDARD

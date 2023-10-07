@@ -81,7 +81,7 @@ impl CrocProto {
 
     /// Uses assymetric eliptic curve to match a symmetric key
     pub async fn negotiate_symmetric_key(&mut self, role: Role) -> Result<[u8; 32]> {
-        let key = Pake::new(role);
+        let key = Pake::new(role, None);
         match role {
             Role::Sender => {
                 let mut a_key = key;
