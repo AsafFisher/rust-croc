@@ -12,7 +12,7 @@ use std::{path::PathBuf, vec};
 use tokio::net::ToSocketAddrs;
 
 #[derive(thiserror::Error, Debug)]
-enum TransferError {
+enum RelayClientError {
     #[error("Something went wrong with received response {0}")]
     BadResponse(String),
     #[error("Symmetric Key negotiation failed")]
@@ -119,7 +119,7 @@ impl RelayClient {
                     // Ping
                     debug!("Got ping");
                 }
-                _ => return Err(TransferError::UnknownKeepaliveMessage(data))?,
+                _ => return Err(RelayClientError::UnknownKeepaliveMessage(data))?,
             }
         }
     }
@@ -144,7 +144,7 @@ impl RelayClient {
         // Banner/IpAddress
         let message = String::from_utf8(enc.read().await?)?;
         if !message.contains("|||") {
-            return Err(TransferError::BadResponse(message.to_string()))?;
+            return Err(RelayClientError::BadResponse(message.to_string()))?;
         }
         let info: Vec<&str> = message.split("|||").collect();
         let banner = info[0];
@@ -160,9 +160,9 @@ impl RelayClient {
         let response = enc.read().await?;
         if response != b"ok" {
             return if response == b"room full" {
-                Err(TransferError::RoomFull(room.to_string()))?
+                Err(RelayClientError::RoomFull(room.to_string()))?
             } else {
-                Err(TransferError::RoomNegotiationFailed)?
+                Err(RelayClientError::RoomNegotiationFailed)?
             };
         }
         Ok(())
