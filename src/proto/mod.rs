@@ -124,17 +124,16 @@ impl CrocProto {
     }
 }
 
-pub struct EncryptedSession<'a> {
-    session: &'a mut CrocProto,
+pub struct EncryptedSession {
     encryptor: AesEncryptor,
 }
 
-impl<'a> EncryptedSession<'a> {
+impl EncryptedSession {
     pub async fn new(
-        session: &'a mut CrocProto,
+        session: &mut CrocProto,
         session_key: &[u8; 32],
         role: Role,
-    ) -> Result<EncryptedSession<'a>> {
+    ) -> Result<EncryptedSession> {
         let encryptor = match role {
             Role::Sender => {
                 let encryptor = AesEncryptor::new(session_key, None);
@@ -148,23 +147,18 @@ impl<'a> EncryptedSession<'a> {
             }
         };
         Ok(Self {
-            session: session,
             encryptor: encryptor,
         })
     }
-    pub async fn write(&mut self, msg: &[u8]) -> Result<()> {
+    pub fn from_encryptor(encryptor: AesEncryptor) -> EncryptedSession {
+        Self { encryptor }
+    }
+    pub async fn write(&mut self, session: &mut CrocProto, msg: &[u8]) -> Result<()> {
         let encrypted_data = self.encryptor.encrypt(msg)?;
-        self.session.write(&encrypted_data).await
+        session.write(&encrypted_data).await
     }
-    pub async fn read(&mut self) -> Result<Vec<u8>> {
-        self.encryptor.decrypt(&self.session.read().await?)
-    }
-}
-impl<'a> std::ops::Deref for EncryptedSession<'a> {
-    type Target = TcpStream;
-
-    fn deref(&self) -> &Self::Target {
-        &self.session.connection
+    pub async fn read(&mut self, session: &mut CrocProto) -> Result<Vec<u8>> {
+        self.encryptor.decrypt(&session.read().await?)
     }
 }
 

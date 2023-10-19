@@ -139,10 +139,10 @@ impl RelayClient {
         let mut enc = EncryptedSession::new(&mut self.stream, sym_key, Role::Sender).await?;
 
         // Transfare password
-        enc.write(password.as_bytes()).await?;
+        enc.write(&mut self.stream, password.as_bytes()).await?;
 
         // Banner/IpAddress
-        let message = String::from_utf8(enc.read().await?)?;
+        let message = String::from_utf8(enc.read(&mut self.stream).await?)?;
         if !message.contains("|||") {
             return Err(RelayClientError::BadResponse(message.to_string()))?;
         }
@@ -155,9 +155,9 @@ impl RelayClient {
 
         debug!("Negotiating room: {room}");
         // Send room number
-        enc.write(room.as_bytes()).await?;
+        enc.write(&mut self.stream, room.as_bytes()).await?;
 
-        let response = enc.read().await?;
+        let response = enc.read(&mut self.stream).await?;
         if response != b"ok" {
             return if response == b"room full" {
                 Err(RelayClientError::RoomFull(room.to_string()))?

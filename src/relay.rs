@@ -125,10 +125,10 @@ async fn negotiate_info(
     rooms: &mut Arc<Mutex<HashMap<String, Room>>>,
 ) -> Result<Option<String>> {
     let mut enc = EncryptedSession::new(&mut session, sym_key, Role::Reciever).await?;
-    let password = String::from_utf8(enc.read().await?)?;
+    let password = String::from_utf8(enc.read(&mut session).await?)?;
     if password != relay_password.trim() {
         debug!("Bad password {password}");
-        enc.write(b"bad password").await?
+        enc.write(&mut session, b"bad password").await?
     }
     let message = if multiplex_ports.len() == 0 {
         "ok".to_string()
@@ -139,28 +139,28 @@ async fn negotiate_info(
             .collect::<Vec<String>>()
             .join(",")
     } + "|||"
-        + &(enc.peer_addr()?.to_string());
+        + &(session.connection.peer_addr()?.to_string());
 
-    enc.write(message.as_bytes()).await?;
+    enc.write(&mut session, message.as_bytes()).await?;
 
-    let room_name = String::from_utf8(enc.read().await?)?;
+    let room_name = String::from_utf8(enc.read(&mut session).await?)?;
     let mut guard = rooms.lock().await;
     match guard.get_mut(&room_name) {
         Some(room) => {
             if room.is_full() {
                 debug!("Room is full");
-                enc.write(b"room full").await?;
+                enc.write(&mut session, b"room full").await?;
                 return Ok(None);
             } else {
                 debug!("Adding receiver to {room_name}");
-                enc.write(b"ok").await?;
+                enc.write(&mut session, b"ok").await?;
                 room.second = Some(session);
                 Ok(Some(room_name))
             }
         }
         None => {
             debug!("Creating room {room_name} and adding the sender to it");
-            enc.write(b"ok").await?;
+            enc.write(&mut session, b"ok").await?;
             guard.insert(
                 room_name.clone(),
                 Room {
