@@ -1,3 +1,4 @@
+pub mod client_session;
 mod croc_enc;
 mod croc_msg;
 mod croc_raw;

@@ -5,11 +5,13 @@ extern crate log;
 
 mod proto;
 mod relay;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crypto::pake::Role;
 use proto::{CrocProto, EncryptedSession};
 use std::{path::PathBuf, vec};
 use tokio::net::ToSocketAddrs;
+
+use crate::proto::client_session::ClientSession;
 
 #[derive(thiserror::Error, Debug)]
 enum RelayClientError {
@@ -72,23 +74,27 @@ impl RelayClient {
             .await?;
         Ok(transferer)
     }
-    pub async fn send(&mut self) -> Result<()> {
-        // Keep the connection untill a transfer request has
-        self.handle_keepalive().await?;
-        // Can be async
-        self.process_relay()?;
-        self.transfer()?;
-        Ok(())
-    }
-    pub async fn recv(&mut self) -> Result<()> {
+
+    async fn connect_to_sender(mut self) -> Result<ClientSession> {
         debug!("Sending handshake");
         // Keep the connection untill a transfer request has
         self.stream.write(b"handshake").await?;
-
-        // Can be async
-        self.process_relay()?;
-        self.transfer()?;
-        Ok(())
+        Ok(ClientSession::new(
+            self.stream,
+            self.shared_secret,
+            self.is_sender,
+            self.external_ip.context("Did not receive external IP")?,
+        ))
+    }
+    async fn wait_for_receiver(mut self) -> Result<ClientSession> {
+        // Keep the connection untill a transfer request has
+        self.handle_keepalive().await?;
+        Ok(ClientSession::new(
+            self.stream,
+            self.shared_secret,
+            self.is_sender,
+            self.external_ip.context("Did not receive external IP")?,
+        ))
     }
     pub fn path(mut self, path: PathBuf) -> Self {
         self.files.push(path);
@@ -192,15 +198,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         relay.start().await.unwrap();
     });
 
-    let default_relay_addr = "localhost:9009";
-    let mut transferer = RelayClient::connect(default_relay_addr, "pass123", "123", false).await?;
-    let client = transferer.send();
-
-    let default_relay_addr = "localhost:9009";
-    let mut transferer2 = RelayClient::connect(default_relay_addr, "pass123", "123", false).await?;
-    let client2 = transferer2.recv();
-
-    let (_res, _re2, _res3) = tokio::join!(relay_task, client, client2);
+    async fn sender() -> Result<()> {
+        let default_relay_addr = "localhost:9009";
+        let transferer =
+            RelayClient::connect(default_relay_addr, "pass123", "12345", false, true).await?;
+        let mut client = transferer.wait_for_receiver().await?;
+        debug!("Start sanding");
+        let a = client.process_client().await;
+        debug!("Returned");
+        a?;
+        Ok(())
+    }
+    async fn receiver() -> Result<()> {
+        let default_relay_addr = "localhost:9009";
+        let transferer2 =
+            RelayClient::connect(default_relay_addr, "pass123", "12345", false, false).await?;
+        let mut client2 = transferer2.connect_to_sender().await?;
+        debug!("Start receiving");
+        client2.process_client().await?;
+        Ok(())
+    }
+    let (res1, res2, res3) = tokio::join!(relay_task, sender(), receiver());
 
     //println!("{}", transferer.code);
     // let client = proto::CrocProto::from_stream(a);
