@@ -1,11 +1,7 @@
-
 use anyhow::{anyhow, Context, Result};
 use byteorder::LittleEndian;
 use crypto::pake::{Pake, PakePubKey, Role};
-use std::{
-    convert::TryInto,
-    io::Write,
-};
+use std::convert::TryInto;
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -26,15 +22,7 @@ const CROC_MAGIC: &[u8; 4] = b"croc";
 pub struct CrocProto {
     pub connection: TcpStream,
 }
-// impl Clone for CrocProto {
-//     fn clone(&self) -> Self {
-//         Self { connection: TcpStream::from_std(self.connection.into_std().unwrap().try_clone().unwrap()).unwrap() }
-//     }
 
-//     fn clone_from(&mut self, source: &Self) {
-//         *self = source.clone()
-//     }
-// }
 impl CrocProto {
     #![allow(dead_code)]
     pub fn from_stream(connection: TcpStream) -> Self {
