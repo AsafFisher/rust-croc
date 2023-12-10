@@ -8,6 +8,7 @@ mod relay;
 use anyhow::{Context, Result};
 use crypto::pake::Role;
 use proto::{CrocProto, EncryptedSession};
+use relay::server;
 use std::{path::PathBuf, vec};
 use tokio::net::ToSocketAddrs;
 
@@ -194,7 +195,7 @@ impl RelayClient {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
     let relay_task = tokio::task::spawn(async {
-        let relay = relay::Relay::new("0.0.0.0:9009", "pass123".to_string(), vec![9010, 9110]);
+        let relay = server::Relay::new("0.0.0.0:9009", "pass123".to_string(), vec![9010, 9110]);
         relay.start().await.unwrap();
     });
 
