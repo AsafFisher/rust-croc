@@ -219,18 +219,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
     let (res1, res2, res3) = tokio::join!(relay_task, sender(), receiver());
-
-    //println!("{}", transferer.code);
-    // let client = proto::CrocProto::from_stream(a);
-
-    // let mut buff = [0u8, 4];
-    // //let _ = a.read(&mut buff);
-    // println!("{:?}", buff);
-
-    // println!("Success!");
     Ok(())
-    // match cli::run(){
-    //     Ok(()) => Ok(()),
-    //     Err(err) => panic!("{:?}", err)
-    // }
 }
