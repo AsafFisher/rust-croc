@@ -23,6 +23,8 @@ enum RelayClientError {
     RoomNegotiationFailed,
     #[error("Got unknown bytes from relay while keepaliving {0:?}")]
     UnknownKeepaliveMessage(Vec<u8>),
+    #[error("Shared secret used in client is invalid {0}")]
+    BadSharedSecret(String),
 }
 struct Config {
     relay_ports: Vec<String>,
@@ -36,26 +38,38 @@ struct RelayClient {
     stream: CrocProto,
     files: Vec<PathBuf>,
     relay_ports: Vec<String>,
+    external_ip: Option<String>,
     disable_local: bool,
+    is_sender: bool,
+    shared_secret: String,
 }
 impl RelayClient {
     pub async fn connect<A: ToSocketAddrs>(
         relay_addr: A,
         password: &str,
-        room: &str,
+        shared_secret: &str,
         disable_local: bool,
+        is_sender: bool,
     ) -> Result<Self> {
+        if shared_secret.len() < 4 {
+            return Err(RelayClientError::BadSharedSecret(shared_secret.to_string()).into());
+        }
         let mut transferer = RelayClient {
             stream: CrocProto::connect(relay_addr).await?,
             files: vec![],
             relay_ports: vec![],
             disable_local,
+            is_sender,
+            shared_secret: shared_secret.to_string(),
+            external_ip: None,
         };
         let sym_key = &transferer
             .stream
             .negotiate_symmetric_key(crypto::pake::Role::Sender)
             .await?;
-        transferer.negotiate_info(sym_key, password, room).await?;
+        transferer
+            .negotiate_info(sym_key, password, &shared_secret[..3])
+            .await?;
         Ok(transferer)
     }
     pub async fn send(&mut self) -> Result<()> {
@@ -149,6 +163,7 @@ impl RelayClient {
         let info: Vec<&str> = message.split("|||").collect();
         let banner = info[0];
         let ipaddr = info[1];
+        self.external_ip = Some(ipaddr.to_string());
         debug!("Benner: {banner}");
         debug!("Ipaddr: {ipaddr}");
         self.relay_ports = banner.split(",").map(|banner| banner.to_string()).collect();
