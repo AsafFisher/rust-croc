@@ -8,10 +8,10 @@ use std::{
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    join,
     net::tcp::{ReadHalf, WriteHalf},
     sync::Mutex,
     task::JoinHandle,
+    try_join,
 };
 
 use crate::proto::{CrocProto, EncryptedSession};
@@ -40,7 +40,7 @@ async fn handle(
     client: tokio::net::TcpStream,
     relay_password: String,
     multiplex_ports: Vec<u16>,
-    mut rooms: Arc<Mutex<HashMap<String, Room>>>,
+    mut rooms: Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
 ) -> Result<()> {
     let mut session = CrocProto::from_stream(client);
     let mut peeked_bytes = [0u8; 4];
@@ -61,68 +61,79 @@ async fn handle(
     )
     .await?;
     if let Some(room_name) = room {
-        let mut guard = rooms.lock().await;
-        if let Some(room) = guard.get_mut(&room_name) {
-            if room.is_full() {
-                let receiver = room.second.take().unwrap().connection;
-                let sender = room.first.take().unwrap().connection;
-                room.handle = relay(receiver, sender).await;
+        let room = {
+            let mut rooms = rooms.lock().await;
+            rooms.get_mut(&room_name).map(|room| room.clone())
+        };
+        if let Some(room) = room {
+            // We do not need to lock rooms anymore.
+            let mut room_guard = room.lock().await;
+            if room_guard.is_full() {
+                let receiver = room_guard.second.take().unwrap().connection;
+                let sender = room_guard.first.take().unwrap().connection;
+                let result = relay(receiver, sender).await;
+                room_guard.first = None;
+                room_guard.second = None;
+                let mut rooms = rooms.lock().await;
+                rooms.remove(&room_name);
+                debug!("RELAY ENDED: {result:?}");
             } else {
-                drop(guard);
+                drop(room_guard);
+                // SAFTY: if a keepalive is sent, it will for sure
+                // be sent before the relay start and will not be sent after
+                // (because after the relay is establish it takes the room lock and never
+                // releases it)
                 do_keepalive(rooms, room_name).await?
             }
         }
     }
     Ok(())
 }
-async fn do_keepalive(rooms: Arc<Mutex<HashMap<String, Room>>>, room_name: String) -> Result<()> {
+async fn do_keepalive(
+    rooms: Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
+    room_name: String,
+) -> Result<()> {
     debug!("Starting keepalive");
-    let mut should_delete_room = false;
-    loop {
+    let room = {
         let mut rooms = rooms.lock().await;
-        if let Some(room) = rooms.get_mut(&room_name) {
-            should_delete_room = if let Some(sender) = &mut room.first {
+        rooms.get_mut(&room_name).map(|room| room.clone())
+    };
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if let Some(room) = &room {
+            let mut room_guard = room.lock().await;
+            if let Some(sender) = &mut room_guard.first {
                 debug!("Sending ping");
                 match sender.write(&[1u8]).await {
                     Ok(_) => {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
                     Err(err) => {
                         // If connection has some type of problem close the room
                         error!("Sender's socket stopped {}", err);
-                        true
                     }
                 }
             } else {
                 // If we get here the ownership of room.first was taken by the relay task
                 // and relay has started
-                debug!("Room has started");
-                false
+                debug!("Keepalive service terminating");
             };
         }
         // No need for keepalive no more
         break;
     }
-    if should_delete_room {
-        let mut rooms = rooms.lock().await;
-        rooms.remove(&room_name);
-    }
     Ok(())
 }
-async fn relay(
-    first: tokio::net::TcpStream,
-    second: tokio::net::TcpStream,
-) -> Option<JoinHandle<()>> {
+fn relay(first: tokio::net::TcpStream, second: tokio::net::TcpStream) -> JoinHandle<Result<()>> {
     debug!("Relaying");
-    Some(tokio::spawn(bridge_sockets(first, second)))
+    tokio::spawn(bridge_sockets(first, second))
 }
 async fn negotiate_info(
     mut session: CrocProto,
     sym_key: &[u8; 32],
     relay_password: &str,
     multiplex_ports: Vec<u16>,
-    rooms: &mut Arc<Mutex<HashMap<String, Room>>>,
+    rooms: &mut Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
 ) -> Result<Option<String>> {
     let mut enc = EncryptedSession::new(&mut session, sym_key, Role::Reciever).await?;
     let password = String::from_utf8(enc.read(&mut session).await?)?;
@@ -147,14 +158,15 @@ async fn negotiate_info(
     let mut guard = rooms.lock().await;
     match guard.get_mut(&room_name) {
         Some(room) => {
-            if room.is_full() {
+            let mut room_guard = room.lock().await;
+            if room_guard.is_full() {
                 debug!("Room is full");
                 enc.write(&mut session, b"room full").await?;
                 return Ok(None);
             } else {
                 debug!("Adding receiver to {room_name}");
                 enc.write(&mut session, b"ok").await?;
-                room.second = Some(session);
+                room_guard.second = Some(session);
                 Ok(Some(room_name))
             }
         }
@@ -163,12 +175,12 @@ async fn negotiate_info(
             enc.write(&mut session, b"ok").await?;
             guard.insert(
                 room_name.clone(),
-                Room {
+                Arc::new(Mutex::new(Room {
                     first: Some(session),
                     second: None,
                     opened: SystemTime::now().into(),
                     handle: None,
-                },
+                })),
             );
             Ok(Some(room_name))
         }
@@ -176,26 +188,38 @@ async fn negotiate_info(
 }
 #[derive(Clone)]
 pub struct Relay<A: tokio::net::ToSocketAddrs> {
-    rooms: Arc<Mutex<HashMap<String, Room>>>,
+    rooms: Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
     bind_address: A,
     password: String,
     multiplex_ports: Vec<u16>,
 }
-async fn asymmetric_bridge_sockets<'a>(mut from: ReadHalf<'a>, mut to_s: WriteHalf<'a>) {
+
+// TODO: Add error handling
+async fn asymmetric_bridge_sockets<'a>(
+    mut from: ReadHalf<'a>,
+    mut to_s: WriteHalf<'a>,
+) -> Result<()> {
     loop {
         let mut buffer_a = [0u8; 1024];
-        let amount = from.read(&mut buffer_a).await.unwrap();
-        to_s.write_all(&mut buffer_a[..amount]).await.unwrap();
+        let amount = from.read(&mut buffer_a).await?;
+        if amount == 0 {
+            return Ok(());
+        }
+        to_s.write_all(&mut buffer_a[..amount]).await?;
     }
 }
-async fn bridge_sockets(mut stream_a: tokio::net::TcpStream, mut stream_b: tokio::net::TcpStream) {
+async fn bridge_sockets(
+    mut stream_a: tokio::net::TcpStream,
+    mut stream_b: tokio::net::TcpStream,
+) -> Result<()> {
     // TODO: use tokio::io::copy
     // TODO: pass streams using channel
     let (a_r, a_w) = stream_a.split();
     let (b_r, b_w) = stream_b.split();
     let a_to_b = asymmetric_bridge_sockets(a_r, b_w);
     let b_to_a = asymmetric_bridge_sockets(b_r, a_w);
-    let (_, _) = join!(a_to_b, b_to_a);
+    try_join!(a_to_b, b_to_a)?;
+    Ok(())
 }
 
 impl<A: tokio::net::ToSocketAddrs> Relay<A> {
