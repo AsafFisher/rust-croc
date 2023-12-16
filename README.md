@@ -1,7 +1,9 @@
 <p align="center">
 <img
-    src="https://user-images.githubusercontent.com/6550035/46709024-9b23ad00-cbf6-11e8-9fb2-ca8b20b7dbec.jpg"
+    src="https://github.com/AsafFisher/rust-croc/assets/6796683/bbd34164-e144-4dfe-87b4-c2c97c58a612"
     width="408px" border="0" alt="croc">
+    
+
 <br>
 </p>
 
