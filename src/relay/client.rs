@@ -1,5 +1,7 @@
 use crate::proto::client_session::ClientSession;
-use crate::proto::{CrocProto, EncryptedSession};
+use crate::proto::{
+    AsyncCrocRead, AsyncCrocWrite, CrocProto, EncryptedSession, FilesInformation, MpscCrocProto,
+};
 use anyhow::{Context, Result};
 use crypto::pake::Role;
 use std::path::PathBuf;
@@ -66,16 +68,23 @@ impl RelayClient {
             .await?;
         Ok(transferer)
     }
-
+    pub fn get_stream(self) -> CrocProto {
+        self.stream
+    }
+    pub fn start_mpsc_stream(self) -> Result<MpscCrocProto> {
+        MpscCrocProto::from_stream(self.stream.connection)
+    }
     pub async fn connect_to_sender(mut self) -> Result<ClientSession> {
         debug!("Sending handshake");
         // Keep the connection untill a transfer request has
         self.stream.write(b"handshake").await?;
         Ok(ClientSession::new(
             self.stream,
+            self.relay_ports,
             self.shared_secret,
             self.is_sender,
             self.external_ip.context("Did not receive external IP")?,
+            None,
         ))
     }
     pub async fn wait_for_receiver(mut self) -> Result<ClientSession> {
@@ -83,9 +92,11 @@ impl RelayClient {
         self.handle_keepalive().await?;
         Ok(ClientSession::new(
             self.stream,
+            self.relay_ports,
             self.shared_secret,
             self.is_sender,
             self.external_ip.context("Did not receive external IP")?,
+            None,
         ))
     }
     pub fn path(mut self, path: PathBuf) -> Self {
