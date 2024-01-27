@@ -3,8 +3,8 @@ mod croc_enc;
 mod croc_msg;
 mod croc_raw;
 pub use croc_enc::EncryptedSession;
-pub use croc_raw::CrocProto;
-
+pub use croc_raw::{CrocProto, AsyncCrocRead, AsyncCrocWrite, MpscCrocProto, OwnedSender, OwnedReceiver};
+pub use croc_msg::{FilesInformation, FileInfo};
 #[cfg(test)]
 mod test {
     use std::net::TcpStream;

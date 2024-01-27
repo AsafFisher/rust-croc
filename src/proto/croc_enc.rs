@@ -1,15 +1,13 @@
 use anyhow::Result;
-use crypto::{
-    aes::AesEncryptor,
-    pake::Role,
-};
+use crypto::{aes::AesEncryptor, pake::Role};
 use std::{
     convert::TryInto,
     io::{Read, Write},
 };
 
-use super::CrocProto;
+use super::{CrocProto, croc_raw::{AsyncCrocWrite, AsyncCrocRead}};
 
+#[derive(Clone)]
 pub struct EncryptedSession {
     encryptor: AesEncryptor,
 }
@@ -39,11 +37,14 @@ impl EncryptedSession {
     pub fn from_encryptor(encryptor: AesEncryptor) -> EncryptedSession {
         Self { encryptor }
     }
-    pub async fn write(&mut self, session: &mut CrocProto, msg: &[u8]) -> Result<()> {
+    pub fn as_encryptor(&self) -> &AesEncryptor{
+        &self.encryptor
+    }
+    pub async fn write<S: AsyncCrocWrite>(&self, session: &mut S, msg: &[u8]) -> Result<()> {
         let encrypted_data = self.encryptor.encrypt(msg)?;
         session.write(&encrypted_data).await
     }
-    pub async fn read(&mut self, session: &mut CrocProto) -> Result<Vec<u8>> {
+    pub async fn read<S: AsyncCrocRead>(&self, session: &mut S) -> Result<Vec<u8>> {
         self.encryptor.decrypt(&session.read().await?)
     }
 }

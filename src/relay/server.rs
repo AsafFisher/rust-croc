@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use std::{
     borrow::BorrowMut,
     collections::HashMap,
+    net::{IpAddr, Ipv4Addr},
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -14,7 +15,7 @@ use tokio::{
     try_join,
 };
 
-use crate::proto::{CrocProto, EncryptedSession};
+use crate::proto::{CrocProto, EncryptedSession, AsyncCrocWrite};
 use crypto::pake::Role;
 struct Room {
     first: Option<CrocProto>,
@@ -187,9 +188,9 @@ async fn negotiate_info(
     }
 }
 #[derive(Clone)]
-pub struct Relay<A: tokio::net::ToSocketAddrs> {
+pub struct Relay {
     rooms: Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
-    bind_address: A,
+    bind_address: String,
     password: String,
     multiplex_ports: Vec<u16>,
 }
@@ -222,8 +223,27 @@ async fn bridge_sockets(
     Ok(())
 }
 
-impl<A: tokio::net::ToSocketAddrs> Relay<A> {
-    pub fn new(bind_address: A, password: String, multiplex_ports: Vec<u16>) -> Relay<A> {
+pub async fn run_instance(
+    password: String,
+    multiplex_ports: Vec<u16>,
+    rooms: Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
+    bind_address: std::net::SocketAddr,
+) -> Result<()> {
+    let listener = tokio::net::TcpListener::bind(&bind_address).await?;
+    loop {
+        let (stream, addr) = listener.accept().await?;
+        debug!("Got client {addr}");
+        tokio::spawn(handle(
+            stream,
+            password.clone(),
+            multiplex_ports.clone(),
+            rooms.clone(),
+        ));
+    }
+}
+
+impl Relay {
+    pub fn new(bind_address: String, password: String, multiplex_ports: Vec<u16>) -> Relay {
         Relay {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             bind_address,
@@ -234,16 +254,27 @@ impl<A: tokio::net::ToSocketAddrs> Relay<A> {
     pub async fn start(self) -> Result<()> {
         // TODO: Create a delete old room task
         debug!("Starting relay");
-        let listener = tokio::net::TcpListener::bind(&self.bind_address).await?;
-        loop {
-            let (stream, addr) = listener.accept().await?;
-            debug!("Got client {addr}");
-            tokio::spawn(handle(
-                stream,
-                self.password.clone(),
+        debug!("Creating file relay sockets");
+        let bind_ip = self.bind_address.parse::<std::net::SocketAddr>()?.ip();
+        for address in self
+            .multiplex_ports
+            .iter()
+            .map(|port| std::net::SocketAddr::new(bind_ip, *port))
+        {
+            tokio::spawn(run_instance(
+                "pass123".to_string(),
                 self.multiplex_ports.clone(),
                 self.rooms.clone(),
+                address,
             ));
         }
+
+        debug!("Creating relay socket");
+        run_instance(
+            self.password,
+            self.multiplex_ports,
+            self.rooms,
+            self.bind_address.parse()?,
+        ).await
     }
 }
