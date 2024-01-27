@@ -32,7 +32,6 @@ struct Config {
 
 pub struct RelayClient {
     stream: CrocProto,
-    files: Vec<PathBuf>,
     relay_ports: Vec<String>,
     external_ip: Option<String>,
     disable_local: bool,
@@ -52,7 +51,6 @@ impl RelayClient {
         }
         let mut transferer = RelayClient {
             stream: CrocProto::connect(relay_addr).await?,
-            files: vec![],
             relay_ports: vec![],
             disable_local,
             is_sender,
@@ -67,9 +65,6 @@ impl RelayClient {
             .negotiate_info(sym_key, password, &shared_secret[..3])
             .await?;
         Ok(transferer)
-    }
-    pub fn get_stream(self) -> CrocProto {
-        self.stream
     }
     pub fn start_mpsc_stream(self) -> Result<MpscCrocProto> {
         MpscCrocProto::from_stream(self.stream.connection)
@@ -98,13 +93,6 @@ impl RelayClient {
             self.external_ip.context("Did not receive external IP")?,
             None,
         ))
-    }
-    pub fn path(mut self, path: PathBuf) -> Self {
-        self.files.push(path);
-        self
-    }
-    pub fn paths(&mut self, mut paths: Vec<PathBuf>) {
-        self.files.append(&mut paths);
     }
     pub async fn handle_keepalive(&mut self) -> Result<()> {
         info!(
@@ -146,12 +134,6 @@ impl RelayClient {
             }
         }
     }
-    fn process_relay(&self) -> Result<()> {
-        todo!()
-    }
-    fn transfer(&self) -> Result<()> {
-        todo!()
-    }
 
     async fn negotiate_info(
         &mut self,
@@ -159,7 +141,7 @@ impl RelayClient {
         password: &str,
         room: &str,
     ) -> Result<()> {
-        let mut enc = EncryptedSession::new(&mut self.stream, sym_key, Role::Sender).await?;
+        let enc = EncryptedSession::new(&mut self.stream, sym_key, Role::Sender).await?;
 
         // Transfare password
         enc.write(&mut self.stream, password.as_bytes()).await?;
