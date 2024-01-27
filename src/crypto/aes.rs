@@ -8,6 +8,7 @@ use pbkdf2::pbkdf2_hmac_array;
 use rand::RngCore;
 use sha2::Sha256;
 
+#[derive(Clone)]
 pub struct AesEncryptor {
     cipher: AesGcm<Aes256, aes_gcm::aead::consts::U12>,
     pub salt: [u8; 8],
@@ -43,15 +44,14 @@ impl AesEncryptor {
             Some(salt) => {
                 debug!("Got salt: {:x?}", hex::encode(salt));
                 salt
-            },
+            }
             None => {
                 let mut salt = [0u8; 8];
                 rnd.fill_bytes(&mut salt);
                 debug!("Generated salt: {:x?}", hex::encode(salt));
                 salt
-            },
+            }
         };
-        
 
         // Derive a strong key using PBKDF2-HMAC-SHA256
         let strong_key = pbkdf2_hmac_array::<Sha256, 32>(session_key, &salt, 100);
@@ -88,19 +88,12 @@ impl AesEncryptor {
     pub fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         // Generate a random nonce for encryption
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        debug!("Generated nonce: {:x?}", hex::encode(&nonce));
 
         // Encrypt the data
         let mut ciphertext = self
             .cipher
             .encrypt(&nonce, data.as_ref())
             .map_err(Error::msg)?;
-
-        debug!(
-            "Full ciphertext (nonce-ciphertext): {}-{}",
-            hex::encode(&nonce),
-            hex::encode(&ciphertext)
-        );
 
         // Prepend the nonce to the ciphertext and return the result
         let mut full_cipher = nonce.to_vec();
