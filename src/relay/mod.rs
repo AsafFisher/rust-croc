@@ -5,6 +5,7 @@ pub mod server;
 #[cfg(test)]
 mod tests {
 
+    use serial_test::serial;
     use std::{io::Write, path::PathBuf};
     use tempfile::NamedTempFile;
     use tokio;
@@ -15,6 +16,7 @@ mod tests {
     };
     use anyhow::Result;
     #[tokio::test]
+    #[serial]
     async fn test_relay() {
         let relay_task = tokio::task::spawn(async {
             let relay = server::Relay::new(
@@ -52,6 +54,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_clients() {
         let relay_task = tokio::task::spawn(async {
             let relay = server::Relay::new(

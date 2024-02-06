@@ -40,4 +40,5 @@ thiserror = "1.0.48"
 tokio = {version = "1.35.0", features = ["net", "io-util", "full"]}
 
 [dev-dependencies]
+serial_test = "3.0.0"
 tempfile = "3.9.0"
