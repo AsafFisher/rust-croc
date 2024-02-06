@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use std::{
     borrow::BorrowMut,
     collections::HashMap,
-    net::{IpAddr, Ipv4Addr},
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -17,7 +16,7 @@ use tokio::{
 
 use crate::proto::{CrocProto, EncryptedSession, AsyncCrocWrite};
 use crypto::pake::Role;
-struct Room {
+pub struct Room {
     first: Option<CrocProto>,
     second: Option<CrocProto>,
     handle: Option<JoinHandle<()>>,
@@ -136,7 +135,7 @@ async fn negotiate_info(
     multiplex_ports: Vec<u16>,
     rooms: &mut Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>,
 ) -> Result<Option<String>> {
-    let mut enc = EncryptedSession::new(&mut session, sym_key, Role::Reciever).await?;
+    let enc = EncryptedSession::new(&mut session, sym_key, Role::Reciever).await?;
     let password = String::from_utf8(enc.read(&mut session).await?)?;
     if password != relay_password.trim() {
         debug!("Bad password {password}");

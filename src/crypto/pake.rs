@@ -293,7 +293,7 @@ fn bigint_to_signed_bytes_be(num: &BigInt) -> Vec<u8> {
 /// Used for pake negotiation
 ///
 /// ```
-/// use crypto::{Pake, Role};
+/// use crypto::pake::{Pake, Role};
 /// use serde_json;
 /// fn main() {
 ///     let pake = Pake::new(Role::Sender, None);

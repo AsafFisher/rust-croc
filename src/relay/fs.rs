@@ -7,7 +7,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::proto::{AsyncCrocRead, AsyncCrocWrite, EncryptedSession, OwnedReceiver, OwnedSender};
+use crate::proto::{EncryptedSession, OwnedSender};
 pub struct FileChunkInfo {
     pub file: Arc<Mutex<File>>,
     pub chunk_size: usize,
