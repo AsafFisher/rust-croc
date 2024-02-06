@@ -8,7 +8,7 @@ use tokio::{
     net::{TcpStream, ToSocketAddrs},
 };
 
-use crate::relay::client::RelayClient;
+
 
 #[derive(thiserror::Error, Debug)]
 pub enum ProtoError {

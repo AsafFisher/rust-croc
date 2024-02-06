@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // run relay_task, sender and receiver concurrently and kill relay_task when sender and receiver are done:
     // rust code:
 
-    let (res2, res3) = tokio::join!(sender(), receiver());
+    let (_res2, _res3) = tokio::join!(sender(), receiver());
     relay_task.abort();
     Ok(())
 }

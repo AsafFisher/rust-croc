@@ -5,5 +5,5 @@ mod croc_raw;
 pub use croc_enc::EncryptedSession;
 pub use croc_msg::{FileInfo, FilesInformation};
 pub use croc_raw::{
-    AsyncCrocRead, AsyncCrocWrite, CrocProto, MpscCrocProto, OwnedReceiver, OwnedSender,
+    AsyncCrocRead, AsyncCrocWrite, CrocProto, MpscCrocProto, OwnedSender,
 };

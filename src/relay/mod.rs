@@ -47,7 +47,7 @@ mod tests {
             client2.stream.write(buff.as_slice()).await?;
             Ok(())
         }
-        let (res2, res3) = tokio::join!(client_a(), client_b());
+        let (_res2, _res3) = tokio::join!(client_a(), client_b());
         relay_task.abort();
     }
 
@@ -113,7 +113,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let mut original = NamedTempFile::new().unwrap();
         original.write(b"hello").unwrap();
-        let (res2, res3) = tokio::join!(
+        let (_res2, _res3) = tokio::join!(
             sender(original.path().to_owned(), directory.path().to_owned()),
             receiver()
         );

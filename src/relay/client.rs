@@ -1,10 +1,10 @@
 use crate::proto::client_session::ClientSession;
 use crate::proto::{
-    AsyncCrocRead, AsyncCrocWrite, CrocProto, EncryptedSession, FilesInformation, MpscCrocProto,
+    AsyncCrocRead, AsyncCrocWrite, CrocProto, EncryptedSession, MpscCrocProto,
 };
 use anyhow::{Context, Result};
 use crypto::pake::Role;
-use std::path::PathBuf;
+
 use tokio::net::ToSocketAddrs;
 
 #[derive(thiserror::Error, Debug)]

@@ -1,6 +1,5 @@
-use std::{convert::TryInto, marker::PhantomData, ops::DerefMut, sync::Arc, time::Duration};
+use std::{convert::TryInto, sync::Arc};
 
-use aes_gcm::{Key, KeyInit};
 use anyhow::{anyhow, Result};
 use crypto::{
     aes::AesEncryptor,
@@ -10,10 +9,7 @@ use inquire::Confirm;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::{
-    fs::File,
-    io::{AsyncReadExt, AsyncSeekExt}, time::sleep, sync::Mutex,
-};
+use tokio::{fs::File, sync::Mutex};
 
 use crate::{
     common::config::Config,
@@ -30,7 +26,7 @@ use super::{
         TypeErrorMessage,
     },
     croc_raw::{MpscCrocProto, ProtoError},
-    CrocProto, EncryptedSession, OwnedReceiver, OwnedSender,
+    CrocProto, EncryptedSession, OwnedSender,
 };
 const TCP_BUFFER_SIZE: i32 = 1024 * 64;
 #[derive(Serialize, Deserialize)]
@@ -55,7 +51,6 @@ pub struct ClientSession {
     state: ClientState,
     pub stream: CrocProto,
     relay_ports: Vec<String>,
-    files_stream: Option<CrocProto>,
     encrypted_session: Option<EncryptedSession>,
     shared_secret: String,
     pub is_sender: bool,
@@ -112,7 +107,6 @@ impl ClientSession {
             state: ClientState::KeyExchange,
             stream,
             relay_ports,
-            files_stream: None,
             encrypted_session: None,
             shared_secret,
             is_sender,
@@ -127,7 +121,7 @@ impl ClientSession {
     // TODO: this should be split to send and recv
     pub async fn process_client(mut self, files: Option<FilesInformation>) -> Result<()> {
         debug!("Starting Client Processing");
-        let port = self
+        let _port = self
             .relay_ports
             .first()
             .ok_or(anyhow!("Error, no relay port given"))?
@@ -203,9 +197,15 @@ impl ClientSession {
                     .iter()
                     .enumerate()
                 {
-                    debug!("Requesting file: {}", file_info.name);
+                    let remote_path = std::path::Path::new(&file_info.remote_folder)
+                        .join(&file_info.name)
+                        .to_str()
+                        .unwrap()
+                        .to_string();
+                    debug!("Requesting file: {}", remote_path);
                     // create the file
-                    let file = tokio::fs::File::create(file_info.name.clone()).await?;
+                    let file = tokio::fs::File::create(remote_path).await?;
+
                     file.set_len(file_info.size as u64).await?;
                     // request the file
                     Message::TypeRecipientReady(RemoteFileRequest {
