@@ -31,11 +31,11 @@ impl AesEncryptor {
     /// # Examples
     ///
     /// ```
-    /// use your_module::EncryptionSession;
+    /// use crypto::aes::AesEncryptor;
     ///
     /// // Create a new EncryptionSession with a session key
     /// let session_key = [0u8; 32];
-    /// let encryption_session = EncryptionSession::new(&session_key);
+    /// let encryption_session = AesEncryptor::new(&session_key, None);
     /// ```
     pub fn new(session_key: &[u8; 32], salt: Option<[u8; 8]>) -> Self {
         // Generate a unique salt
@@ -77,9 +77,10 @@ impl AesEncryptor {
     /// # Examples
     ///
     /// ```
+    /// use crypto::aes::AesEncryptor;
     /// // Create a new EncryptionSession with a session key
     /// let session_key = [0u8; 32];
-    /// let encryption_session = EncryptionSession::new(&session_key);
+    /// let encryption_session = AesEncryptor::new(&session_key, None);
     ///
     /// // Encrypt data
     /// let data = b"Hello, world!";
@@ -118,9 +119,10 @@ impl AesEncryptor {
     /// # Examples
     ///
     /// ```
+    /// use crypto::aes::AesEncryptor;
     /// // Create a new EncryptionSession with a session key
     /// let session_key = [0u8; 32];
-    /// let encryption_session = EncryptionSession::new(&session_key);
+    /// let encryption_session = AesEncryptor::new(&session_key, None);
     ///
     /// // Encrypt data
     /// let data = b"Hello, world!";
