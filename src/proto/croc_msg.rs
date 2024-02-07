@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
-use crypto::pake::PakePubKey;
 use inquire::Confirm;
+use rust_pake::pake::PakePubKey;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::convert::TryFrom;
 use tokio::fs;

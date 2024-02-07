@@ -3,7 +3,7 @@ use crate::proto::{
     AsyncCrocRead, AsyncCrocWrite, CrocProto, EncryptedSession, MpscCrocProto,
 };
 use anyhow::{Context, Result};
-use crypto::pake::Role;
+use rust_pake::pake::Role;
 
 use tokio::net::ToSocketAddrs;
 
@@ -59,7 +59,7 @@ impl RelayClient {
         };
         let sym_key = &transferer
             .stream
-            .negotiate_symmetric_key(crypto::pake::Role::Sender)
+            .negotiate_symmetric_key(rust_pake::pake::Role::Sender)
             .await?;
         transferer
             .negotiate_info(sym_key, password, &shared_secret[..3])

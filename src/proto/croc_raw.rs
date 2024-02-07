@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use byteorder::LittleEndian;
-use crypto::pake::{Pake, PakePubKey, Role};
+use rust_pake::pake::{Pake, PakePubKey, Role};
 use std::convert::TryInto;
 
 use tokio::{

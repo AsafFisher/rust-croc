@@ -1,12 +1,10 @@
 use std::{convert::TryInto, sync::Arc};
 
+use crate::crypto::aes::AesEncryptor;
 use anyhow::{anyhow, Result};
-use crypto::{
-    aes::AesEncryptor,
-    pake::{Pake, Role},
-};
 use inquire::Confirm;
 use rand::RngCore;
+use rust_pake::pake::{Pake, Role};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::{fs::File, sync::Mutex};
@@ -56,7 +54,7 @@ pub struct ClientSession {
     pub is_sender: bool,
     external_ip: String,
     peer_external_ip: Option<String>,
-    key: Option<Pake<crypto::pake::SIEC255Params>>,
+    key: Option<Pake<rust_pake::pake::SIEC255Params>>,
 
     // The whole design here is broken... This struct should be generic
     // in its impl for Receiver and Sender. That way we can maintain one files field that can

@@ -7,6 +7,7 @@ extern crate pretty_env_logger;
 extern crate log;
 
 mod common;
+mod crypto;
 mod proto;
 mod relay;
 use anyhow::Result;
