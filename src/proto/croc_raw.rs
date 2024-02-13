@@ -102,6 +102,13 @@ impl MpscCrocProto {
                     error!("Error reading from socket: {}", e);
                     break;
                 }
+                // Hack, to fix a bug with `croc`'s original relay where a pint (1u8) is sent by the server
+                // after the connection was established between the two parties.
+                if message.len() == 1 && message[0] == 1u8 {
+                    trace!("Received 1u8, ignoring");
+                    continue;
+                }
+                // Pass the message to the channel
                 if let Err(e) = read_sender.send(message).await {
                     error!("Error sending to channel: {}", e);
                     break;
