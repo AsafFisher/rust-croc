@@ -14,8 +14,8 @@ use tokio::{
     try_join,
 };
 
-use crate::proto::{CrocProto, EncryptedSession, AsyncCrocWrite};
-use crypto::pake::Role;
+use crate::proto::{AsyncCrocWrite, CrocProto, EncryptedSession};
+use rust_pake::pake::Role;
 pub struct Room {
     first: Option<CrocProto>,
     second: Option<CrocProto>,

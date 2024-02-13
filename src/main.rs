@@ -7,6 +7,7 @@ extern crate pretty_env_logger;
 extern crate log;
 
 mod common;
+mod crypto;
 mod proto;
 mod relay;
 use anyhow::Result;
@@ -33,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     async fn sender() -> Result<()> {
         let default_relay_addr = "localhost:9009";
         let transferer =
-            client::RelayClient::connect(default_relay_addr, "pass123", "12345", false, true)
+            client::RelayClient::connect(default_relay_addr, "pass123", "12345", false)
                 .await?;
         let client = transferer.wait_for_receiver().await?;
         debug!("Start sending");
@@ -69,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     async fn receiver() -> Result<()> {
         let default_relay_addr = "localhost:9009";
         let transferer2: client::RelayClient =
-            client::RelayClient::connect(default_relay_addr, "pass123", "12345", false, false)
+            client::RelayClient::connect(default_relay_addr, "pass123", "12345", false)
                 .await?;
         let client2 = transferer2.connect_to_sender().await?;
         debug!("Start receiving");

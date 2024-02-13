@@ -1,5 +1,6 @@
+use crate::crypto::aes::AesEncryptor;
 use anyhow::Result;
-use crypto::{aes::AesEncryptor, pake::Role};
+use rust_pake::pake::Role;
 use std::convert::TryInto;
 
 use super::{
