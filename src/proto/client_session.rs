@@ -79,7 +79,6 @@ async fn start_net_task(relay_port: String, shared_secret: String) -> Result<Mps
         &"pass123".to_string(),
         &format!("{}-1", shared_secret),
         false,
-        false,
     )
     .await?
     .start_mpsc_stream()

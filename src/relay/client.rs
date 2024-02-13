@@ -35,7 +35,6 @@ pub struct RelayClient {
     relay_ports: Vec<String>,
     external_ip: Option<String>,
     disable_local: bool,
-    is_sender: bool,
     shared_secret: String,
 }
 impl RelayClient {
@@ -44,7 +43,6 @@ impl RelayClient {
         password: &str,
         shared_secret: &str,
         disable_local: bool,
-        is_sender: bool,
     ) -> Result<Self> {
         if shared_secret.len() < 4 {
             return Err(RelayClientError::BadSharedSecret(shared_secret.to_string()).into());
@@ -53,7 +51,6 @@ impl RelayClient {
             stream: CrocProto::connect(relay_addr).await?,
             relay_ports: vec![],
             disable_local,
-            is_sender,
             shared_secret: shared_secret.to_string(),
             external_ip: None,
         };
@@ -77,7 +74,7 @@ impl RelayClient {
             self.stream,
             self.relay_ports,
             self.shared_secret,
-            self.is_sender,
+            false,
             self.external_ip.context("Did not receive external IP")?,
             None,
         ))
@@ -89,7 +86,7 @@ impl RelayClient {
             self.stream,
             self.relay_ports,
             self.shared_secret,
-            self.is_sender,
+            true,
             self.external_ip.context("Did not receive external IP")?,
             None,
         ))

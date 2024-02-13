@@ -31,7 +31,7 @@ mod tests {
             const MSG: &str = "hello";
             let default_relay_addr = "localhost:9009";
             let transferer =
-                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false, true)
+                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false)
                     .await?;
             let mut client = transferer.wait_for_receiver().await?;
             debug!("Start sending");
@@ -42,7 +42,7 @@ mod tests {
         async fn client_b() -> Result<()> {
             let default_relay_addr = "localhost:9009";
             let transferer2: client::RelayClient =
-                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false, false)
+                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false)
                     .await?;
             let mut client2 = transferer2.connect_to_sender().await?;
             let buff = client2.stream.read().await?;
