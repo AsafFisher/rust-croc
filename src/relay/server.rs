@@ -104,6 +104,8 @@ async fn do_keepalive(
             let mut room_guard = room.lock().await;
             if let Some(sender) = &mut room_guard.first {
                 debug!("Sending ping");
+                // Ping will never be sent after the `first` and `second` communicates.
+                // On `croc`'s impl this byte can be sent by mistake after the relay starts.
                 match sender.write(&[1u8]).await {
                     Ok(_) => {
                         continue;
