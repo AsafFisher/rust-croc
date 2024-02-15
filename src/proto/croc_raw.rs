@@ -8,8 +8,6 @@ use tokio::{
     net::{TcpStream, ToSocketAddrs},
 };
 
-
-
 #[derive(thiserror::Error, Debug)]
 pub enum ProtoError {
     #[error("Symmetric Key negotiation failed")]

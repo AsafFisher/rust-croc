@@ -276,6 +276,7 @@ impl Relay {
             self.multiplex_ports,
             self.rooms,
             self.bind_address.parse()?,
-        ).await
+        )
+        .await
     }
 }
