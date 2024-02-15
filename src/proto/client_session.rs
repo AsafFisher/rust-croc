@@ -1,7 +1,7 @@
 use std::{convert::TryInto, sync::Arc};
 
-use crate::crypto::aes::AesEncryptor;
-use anyhow::{anyhow, Result};
+use crate::{crypto::aes::AesEncryptor, relay::fs::FsWriterCommand};
+use anyhow::{anyhow, Context, Result};
 use inquire::Confirm;
 use rand::RngCore;
 use rust_pake::pake::{Pake, Role};
@@ -86,7 +86,7 @@ async fn start_net_task(relay_port: String, shared_secret: String) -> Result<Mps
 async fn start_fs_task(
     sender_tx: OwnedSender,
     encrypted_session: EncryptedSession,
-) -> Result<CrocFsInterface> {
+) -> Result<(tokio::task::JoinHandle<Result<()>>, CrocFsInterface)> {
     CrocFsInterface::new(sender_tx, encrypted_session).await
 }
 
@@ -127,6 +127,7 @@ impl ClientSession {
         let net = start_net_task(self.relay_ports[0].clone(), secret).await?;
         let (mut receiver, sender) = net.into_split();
         let mut rw = None;
+        let mut fs_writer_handle = None;
 
         if !self.is_sender {
             debug!("Receiver Started: Sending initial key");
@@ -149,12 +150,13 @@ impl ClientSession {
             match msg {
                 Message::Pake(msg) => {
                     self.process_key_exchange(msg).await?;
-                    let tmp_fs = start_fs_task(
+                    let (handle, tmp_fs) = start_fs_task(
                         sender.clone(),
                         self.encrypted_session.as_ref().unwrap().clone(),
                     )
                     .await?;
                     rw = Some(tmp_fs.into_split());
+                    fs_writer_handle = Some(handle)
                 }
                 Message::ExternalIP(msg) => self.process_ip_exchange(msg).await?,
                 Message::Finished => {
@@ -225,18 +227,29 @@ impl ClientSession {
                         match &rw {
                             Some((_, writer)) => {
                                 writer
-                                    .send(FileChunk {
+                                    .send(FsWriterCommand::Write(FileChunk {
                                         file: mv_file,
                                         data: chunk,
-                                    })
+                                    }))
                                     .await?;
                                 current_amount += 1;
+                                if current_amount == total_chunks {
+                                    debug!("Sending a stop command to the writer");
+                                    writer.send(FsWriterCommand::Stop).await?;
+                                }
                             }
                             None => panic!("Should not happen"),
                         }
                     }
                     debug!("Done receiving file");
                 }
+                fs_writer_handle
+                    .take()
+                    .unwrap()
+                    .await
+                    .unwrap()
+                    .context("Fs writer could not die properly").unwrap();
+                info!("Sending finished");
                 // send finished
                 Message::Finished.send(&mut self.stream).await?;
             }

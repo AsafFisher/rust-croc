@@ -52,38 +52,59 @@ pub struct FileChunk {
     pub file: Arc<Mutex<File>>,
     pub data: Vec<u8>,
 }
+
+// This is needed because we need to close the program just after all the data has been written to FS
+pub enum FsWriterCommand {
+    Write(FileChunk),
+    Stop,
+}
 async fn fs_writer_task(
-    mut fs_receiver: tokio::sync::mpsc::Receiver<FileChunk>,
+    mut fs_receiver: tokio::sync::mpsc::Receiver<FsWriterCommand>,
 
     encrypted_session: EncryptedSession,
 ) -> Result<()> {
     debug!("fs_writer_task started");
-
+    let mut writers: Vec<tokio::task::JoinHandle<()>> = Vec::new();
     // Receive data from the receiver task and write it to the file system directly:
-    while let Some(file_chunk) = fs_receiver.recv().await {
-        let encryptor = encrypted_session.as_encryptor().clone();
-        tokio::spawn(async move {
-            let data = encryptor.decrypt(&file_chunk.data);
-            match data {
-                Ok(data) => {
-                    // the opposite of fs_reader_task
-                    let file = file_chunk.file;
-                    // get offset value from data
-                    let mut offset_bytes = [0u8; 8];
-
-                    offset_bytes.copy_from_slice(&data[0..8]);
-                    let offset = usize::from_le_bytes(offset_bytes);
-                    {
-                        let mut file = file.lock().await;
-                        file.seek(std::io::SeekFrom::Start(offset as u64))
-                            .await
-                            .unwrap();
-                        file.write_all(&data[8..]).await.unwrap();
+    while let Some(command) = fs_receiver.recv().await {
+        match command {
+            FsWriterCommand::Stop => {
+                debug!("Waiting for all writers to stop");
+                for writer in writers {
+                    if writer.is_finished() {
+                        continue;
                     }
+                    writer.await.unwrap();
                 }
-                Err(err) => error!("Could not decrypt chunk {err}"),
+                debug!("Writer stopped");
+                break;
             }
-        });
+            FsWriterCommand::Write(file_chunk) => {
+                let encryptor = encrypted_session.as_encryptor().clone();
+                writers.push(tokio::spawn(async move {
+                    let data = encryptor.decrypt(&file_chunk.data);
+                    match data {
+                        Ok(data) => {
+                            // the opposite of fs_reader_task
+                            let file = file_chunk.file;
+                            // get offset value from data
+                            let mut offset_bytes = [0u8; 8];
+
+                            offset_bytes.copy_from_slice(&data[0..8]);
+                            let offset = usize::from_le_bytes(offset_bytes);
+                            {
+                                let mut file = file.lock().await;
+                                file.seek(std::io::SeekFrom::Start(offset as u64))
+                                    .await
+                                    .unwrap();
+                                file.write_all(&data[8..]).await.unwrap();
+                            }
+                        }
+                        Err(err) => error!("Could not decrypt chunk {err}"),
+                    }
+                }));
+            }
+        }
     }
     debug!("fs_writer_task ended");
     Ok(())
@@ -91,13 +112,13 @@ async fn fs_writer_task(
 
 pub struct CrocFsInterface {
     fs_read_message_sender: tokio::sync::mpsc::Sender<FileChunkInfo>,
-    fs_write_message_sender: tokio::sync::mpsc::Sender<FileChunk>,
+    fs_write_message_sender: tokio::sync::mpsc::Sender<FsWriterCommand>,
 }
 impl CrocFsInterface {
     pub async fn new(
         sender_tx: OwnedSender,
         encrypted_session: EncryptedSession,
-    ) -> Result<CrocFsInterface> {
+    ) -> Result<(tokio::task::JoinHandle<Result<()>>, CrocFsInterface)> {
         // initialize fs_receiver
         let (fs_read_message_sender, fs_read_message_receiver) = tokio::sync::mpsc::channel(100);
         let (fs_write_message_sender, fs_write_message_receiver) = tokio::sync::mpsc::channel(100);
@@ -106,19 +127,22 @@ impl CrocFsInterface {
         tokio::spawn(async move {
             fs_reader_task(fs_read_message_receiver, sender_tx, encrypted_session).await
         });
-        tokio::spawn(async move {
+        let writer_handle = tokio::spawn(async move {
             fs_writer_task(fs_write_message_receiver, cloned_encrypted_session).await
         });
-        Ok(CrocFsInterface {
-            fs_read_message_sender,
-            fs_write_message_sender,
-        })
+        Ok((
+            writer_handle,
+            CrocFsInterface {
+                fs_read_message_sender,
+                fs_write_message_sender,
+            },
+        ))
     }
     pub fn into_split(
         self,
     ) -> (
         tokio::sync::mpsc::Sender<FileChunkInfo>,
-        tokio::sync::mpsc::Sender<FileChunk>,
+        tokio::sync::mpsc::Sender<FsWriterCommand>,
     ) {
         (self.fs_read_message_sender, self.fs_write_message_sender)
     }
