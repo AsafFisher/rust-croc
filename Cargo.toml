@@ -4,9 +4,9 @@ version = "0.1.0"
 authors = ["Asaf Fisher <asaffisher@icloud.com>"]
 edition = "2018"
 
-[[bin]]
-name = "croc"
-path = "src/main.rs"
+[lib]
+name = "rust_croc"
+path = "src/lib.rs"
 
 [dependencies]
 aes = "0.8.3"

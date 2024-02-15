@@ -31,7 +31,7 @@ impl AesEncryptor {
     /// # Examples
     ///
     /// ```
-    /// use crypto::aes::AesEncryptor;
+    /// use rust_croc::crypto::aes::AesEncryptor;
     ///
     /// // Create a new EncryptionSession with a session key
     /// let session_key = [0u8; 32];
@@ -77,7 +77,7 @@ impl AesEncryptor {
     /// # Examples
     ///
     /// ```
-    /// use crypto::aes::AesEncryptor;
+    /// use rust_croc::crypto::aes::AesEncryptor;
     /// // Create a new EncryptionSession with a session key
     /// let session_key = [0u8; 32];
     /// let encryption_session = AesEncryptor::new(&session_key, None);
@@ -119,7 +119,7 @@ impl AesEncryptor {
     /// # Examples
     ///
     /// ```
-    /// use crypto::aes::AesEncryptor;
+    /// use rust_croc::crypto::aes::AesEncryptor;
     /// // Create a new EncryptionSession with a session key
     /// let session_key = [0u8; 32];
     /// let encryption_session = AesEncryptor::new(&session_key, None);

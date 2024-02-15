@@ -41,11 +41,12 @@ impl EncryptedSession {
     pub fn as_encryptor(&self) -> &AesEncryptor {
         &self.encryptor
     }
-    pub async fn write<S: AsyncCrocWrite>(&self, session: &mut S, msg: &[u8]) -> Result<()> {
+    // pub(crate) because AsyncCrocWrite should not be exposed to the user `async_fn_in_trait`
+    pub(crate) async fn write<S: AsyncCrocWrite>(&self, session: &mut S, msg: &[u8]) -> Result<()> {
         let encrypted_data = self.encryptor.encrypt(msg)?;
         session.write(&encrypted_data).await
     }
-    pub async fn read<S: AsyncCrocRead>(&self, session: &mut S) -> Result<Vec<u8>> {
+    pub(crate) async fn read<S: AsyncCrocRead>(&self, session: &mut S) -> Result<Vec<u8>> {
         self.encryptor.decrypt(&session.read().await?)
     }
 }

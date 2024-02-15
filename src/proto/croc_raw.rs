@@ -20,10 +20,10 @@ pub enum ProtoError {
     CurveNotInitialized,
 }
 const CROC_MAGIC: &[u8; 4] = b"croc";
-pub trait AsyncCrocRead {
+pub(crate) trait AsyncCrocRead {
     async fn read(&mut self) -> Result<Vec<u8>>;
 }
-pub trait AsyncCrocWrite {
+pub(crate) trait AsyncCrocWrite {
     async fn write(&mut self, msg: &[u8]) -> Result<()>;
 }
 
