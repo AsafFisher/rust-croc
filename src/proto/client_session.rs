@@ -1,4 +1,4 @@
-use std::{convert::TryInto, sync::Arc};
+use std::{convert::TryInto, net::IpAddr, sync::Arc};
 
 use crate::{crypto::aes::AesEncryptor, relay::fs::FsWriterCommand};
 use anyhow::{anyhow, Context, Result};
@@ -7,7 +7,7 @@ use rand::RngCore;
 use rust_pake::pake::{Pake, Role};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::{fs::File, sync::Mutex};
+use tokio::{fs::File, net::ToSocketAddrs, sync::Mutex};
 
 use crate::{
     common::config::Config,
@@ -48,6 +48,7 @@ trait Process<T> {
 pub struct ClientSession {
     state: ClientState,
     pub stream: CrocProto,
+    relay_address: IpAddr,
     relay_ports: Vec<String>,
     encrypted_session: Option<EncryptedSession>,
     shared_secret: String,
@@ -63,19 +64,18 @@ pub struct ClientSession {
 }
 
 // receiver_task will receive a message from the client relay and write it to the sender_ipc channel
-async fn start_net_task(relay_port: String, shared_secret: String) -> Result<MpscCrocProto> {
+async fn start_net_task<A: ToSocketAddrs + std::fmt::Debug>(
+    relay_address: A,
+    shared_secret: String,
+) -> Result<MpscCrocProto> {
     // Connect to relay using relay client
-    let default_relay_addr = "localhost";
-
-    // join host and port
-    let relay_address = format!("{}:{}", default_relay_addr, relay_port);
     let mut hasher = Sha256::new();
     hasher.update(&shared_secret.as_bytes()[5..]);
     // generate hex string from hash
     let shared_secret = &format!("{:x}", hasher.finalize())[..6];
-    debug!("Connecting to relay at {}", relay_address);
+    debug!("Connecting to data transfare room {relay_address:?}");
     RelayClient::connect(
-        &relay_address,
+        relay_address,
         &"pass123".to_string(),
         &format!("{}-1", shared_secret),
         false,
@@ -93,6 +93,7 @@ async fn start_fs_task(
 impl ClientSession {
     pub fn new(
         stream: CrocProto,
+        relay_address: IpAddr,
         relay_ports: Vec<String>,
         shared_secret: String,
         // this is redundent and bad
@@ -103,6 +104,7 @@ impl ClientSession {
         Self {
             state: ClientState::KeyExchange,
             stream,
+            relay_address,
             relay_ports,
             encrypted_session: None,
             shared_secret,
@@ -124,7 +126,12 @@ impl ClientSession {
             .ok_or(anyhow!("Error, no relay port given"))?
             .clone();
         let secret = self.shared_secret.clone();
-        let net = start_net_task(self.relay_ports[0].clone(), secret).await?;
+        // relay port to int:
+        let net = start_net_task(
+            (self.relay_address, self.relay_ports[0].parse::<u16>()?),
+            secret,
+        )
+        .await?;
         let (mut receiver, sender) = net.into_split();
         let mut rw = None;
         let mut fs_writer_handle = None;

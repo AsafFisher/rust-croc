@@ -1,7 +1,7 @@
+use std::net::IpAddr;
+
 use crate::proto::client_session::ClientSession;
-use crate::proto::{
-    AsyncCrocRead, AsyncCrocWrite, CrocProto, EncryptedSession, MpscCrocProto,
-};
+use crate::proto::{AsyncCrocRead, AsyncCrocWrite, CrocProto, EncryptedSession, MpscCrocProto};
 use anyhow::{Context, Result};
 use rust_pake::pake::Role;
 
@@ -32,6 +32,7 @@ struct Config {
 
 pub struct RelayClient {
     stream: CrocProto,
+    relay_addr: IpAddr,
     relay_ports: Vec<String>,
     external_ip: Option<String>,
     disable_local: bool,
@@ -47,8 +48,12 @@ impl RelayClient {
         if shared_secret.len() < 4 {
             return Err(RelayClientError::BadSharedSecret(shared_secret.to_string()).into());
         }
+        // get ipaddr from relay_addr
+        let stream = CrocProto::connect(relay_addr).await?;
+        let relay_addr = stream.connection.peer_addr()?.ip();
         let mut transferer = RelayClient {
-            stream: CrocProto::connect(relay_addr).await?,
+            stream,
+            relay_addr,
             relay_ports: vec![],
             disable_local,
             shared_secret: shared_secret.to_string(),
@@ -72,6 +77,7 @@ impl RelayClient {
         self.stream.write(b"handshake").await?;
         Ok(ClientSession::new(
             self.stream,
+            self.relay_addr,
             self.relay_ports,
             self.shared_secret,
             false,
@@ -84,6 +90,7 @@ impl RelayClient {
         self.handle_keepalive().await?;
         Ok(ClientSession::new(
             self.stream,
+            self.relay_addr,
             self.relay_ports,
             self.shared_secret,
             true,
