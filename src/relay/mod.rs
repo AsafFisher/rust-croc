@@ -6,9 +6,9 @@ pub mod server;
 mod tests {
 
     use serial_test::serial;
-    use std::{io::Write, path::PathBuf};
+    use std::{io::Write, path::PathBuf, sync::Arc};
     use tempfile::NamedTempFile;
-    use tokio;
+    use tokio::{self, sync::Notify};
 
     use crate::{
         proto::{AsyncCrocRead, AsyncCrocWrite, FileInfo, FilesInformation},
@@ -31,8 +31,7 @@ mod tests {
             const MSG: &str = "hello";
             let default_relay_addr = "localhost:9009";
             let transferer =
-                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false)
-                    .await?;
+                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false).await?;
             let mut client = transferer.wait_for_receiver().await?;
             debug!("Start sending");
             client.stream.write(MSG.as_bytes()).await?;
@@ -42,8 +41,7 @@ mod tests {
         async fn client_b() -> Result<()> {
             let default_relay_addr = "localhost:9009";
             let transferer2: client::RelayClient =
-                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false)
-                    .await?;
+                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false).await?;
             let mut client2 = transferer2.connect_to_sender().await?;
             let buff = client2.stream.read().await?;
             client2.stream.write(buff.as_slice()).await?;
@@ -65,11 +63,15 @@ mod tests {
             relay.start().await.unwrap();
         });
 
-        async fn sender(original: PathBuf, dest_file: PathBuf) -> Result<()> {
+        async fn sender(
+            original: PathBuf,
+            dest_file: PathBuf,
+            notifier: Arc<Notify>,
+        ) -> Result<()> {
             let default_relay_addr = "localhost:9009";
             let transferer =
-                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false, true)
-                    .await?;
+                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false).await?;
+            notifier.notify_one();
             let client = transferer.wait_for_receiver().await?;
             debug!("Start sending");
             let a = client
@@ -101,11 +103,13 @@ mod tests {
             a?;
             Ok(())
         }
-        async fn receiver() -> Result<()> {
+        async fn receiver(is_sender_ready: Arc<Notify>) -> Result<()> {
+            // sleep 2 seconds
+            // wait for sender to create the room
+            is_sender_ready.notified().await;
             let default_relay_addr = "localhost:9009";
             let transferer2: client::RelayClient =
-                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false, false)
-                    .await?;
+                client::RelayClient::connect(default_relay_addr, "pass123", "12345", false).await?;
             let client2 = transferer2.connect_to_sender().await?;
             debug!("Start receiving");
             client2.process_client(None).await?;
@@ -115,15 +119,24 @@ mod tests {
         // rust code:
         let directory = tempfile::tempdir().unwrap();
         let mut original = NamedTempFile::new().unwrap();
-        original.write(b"hello").unwrap();
+        // write 670 MB of data in vec to the file
+        let vec: Vec<u8> = vec![42; 670 * 1024 * 1024];
+        original.write(vec.as_slice()).unwrap();
+        let notifier = Arc::new(Notify::new());
+        let notified = notifier.clone();
+        //original.write(b"hello").unwrap();
         let (_res2, _res3) = tokio::join!(
-            sender(original.path().to_owned(), directory.path().to_owned()),
-            receiver()
+            sender(
+                original.path().to_owned(),
+                directory.path().to_owned(),
+                notifier
+            ),
+            receiver(notified)
         );
         let mut path_to_dst_file = directory.path().to_owned();
         path_to_dst_file.push(original.path().file_name().unwrap().to_str().unwrap());
         let str = std::fs::read_to_string(path_to_dst_file).unwrap();
-        assert_eq!(str, "hello");
+        assert!(str.as_bytes() == vec);
         relay_task.abort();
     }
 }
