@@ -76,7 +76,7 @@ impl RelayClient {
             self.shared_secret,
             false,
             self.external_ip.context("Did not receive external IP")?,
-            None,
+            false,
         ))
     }
     pub async fn wait_for_receiver(mut self) -> Result<ClientSession> {
@@ -88,7 +88,7 @@ impl RelayClient {
             self.shared_secret,
             true,
             self.external_ip.context("Did not receive external IP")?,
-            None,
+            false,
         ))
     }
     pub async fn handle_keepalive(&mut self) -> Result<()> {

@@ -59,7 +59,7 @@ pub struct ClientSession {
     // The whole design here is broken... This struct should be generic
     // in its impl for Receiver and Sender. That way we can maintain one files field that can
     files_to_receive: Option<FilesInformation>,
-    config: Config,
+    pub no_prompt: bool,
 }
 
 // receiver_task will receive a message from the client relay and write it to the sender_ipc channel
@@ -98,7 +98,7 @@ impl ClientSession {
         // this is redundent and bad
         is_sender: bool,
         external_ip: String,
-        config: Option<Config>,
+        no_prompt: bool,
     ) -> Self {
         Self {
             state: ClientState::KeyExchange,
@@ -111,7 +111,7 @@ impl ClientSession {
             peer_external_ip: None,
             key: None,
             files_to_receive: None,
-            config: config.unwrap_or_default(),
+            no_prompt: false,
         }
     }
 
@@ -348,7 +348,7 @@ impl ClientSession {
         if let Some(files_info) = &self.files_to_receive {
             // TODO: Change files to random names if `Sending Text`
             let files_info_local = files_info.clone();
-            let confirmed = tokio::task::spawn_blocking(move || {
+            let confirmed = self.no_prompt || tokio::task::spawn_blocking(move || {
                 Confirm::new(&format!(
                     "Should receive {} items ({} bytes)",
                     files_info_local.total_items(),
